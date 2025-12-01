@@ -6,10 +6,10 @@ COPY --chown=nginx . /var/www/html
 # Copiamos la configuración de Nginx
 COPY config/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Cambiamos a root para instalaciones y permisos
+# Cambiamos a root para configuraciones del sistema
 USER root
 
-# 1. Instalamos extensiones PHP 8.3
+# 1. Instalar extensiones PHP 8.3
 RUN apk add --no-cache \
     php83-intl \
     php83-mysqli \
@@ -20,11 +20,15 @@ RUN apk add --no-cache \
     php83-tokenizer \
     php83-session
 
-# 2. CRÍTICO: Arreglamos los permisos para que el usuario nginx pueda escribir los PIDs y Sockets
-# Esto soluciona el error "CRIT could not write pidfile" y "Permission denied"
-RUN chown -R nginx:nginx /run /var/lib/nginx /var/log/nginx
+# 2. CONFIGURACIÓN CLAVE: Modificar PHP-FPM para usar TCP (Puerto 9000)
+# Esto reemplaza la configuración de socket por la de red, arreglando el error 502
+RUN sed -i 's|listen = /run/php-fpm.sock|listen = 127.0.0.1:9000|g' /etc/php83/php-fpm.d/www.conf
 
-# Volvemos al usuario nginx para ejecutar la app de forma segura
+# Aseguramos que PHP corra como el usuario 'nginx' para evitar problemas de permisos
+RUN sed -i 's|user = nobody|user = nginx|g' /etc/php83/php-fpm.d/www.conf && \
+    sed -i 's|group = nobody|group = nginx|g' /etc/php83/php-fpm.d/www.conf
+
+# Volvemos al usuario nginx
 USER nginx
 
 EXPOSE 8080
